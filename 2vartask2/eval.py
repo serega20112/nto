@@ -1,10 +1,7 @@
-# -*- coding: utf-8 -*-
 import numpy as np
 import cv2
 
-
 def predict_type_of_road_markings(image: np.ndarray) -> str:
-    h, w = image.shape[:2]
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     thresh_val = np.percentile(gray, 99)
     _, mask = cv2.threshold(gray, thresh_val, 255, cv2.THRESH_BINARY)
@@ -22,9 +19,8 @@ def predict_type_of_road_markings(image: np.ndarray) -> str:
 
     perimeters = [cv2.arcLength(c, closed=False) for c in contours]
     areas = [cv2.contourArea(c) for c in contours]
-
-    avg_p = np.mean(perimeters)
-    area = sum(areas)
+    avg_perimeter = np.mean(perimeters)
+    total_area = sum(areas)
 
     centers = []
     for c in contours:
@@ -38,30 +34,22 @@ def predict_type_of_road_markings(image: np.ndarray) -> str:
     if len(centers) >= 2:
         gap = np.linalg.norm(np.array(centers[0]) - np.array(centers[1]))
 
-    # Упрощённые правила
+    h, w = image.shape[:2]
+    ratio = w / h
 
-    if avg_p > 100:
+    # РћРўР›РђР”РљРђ: РїРµС‡Р°С‚Р°РµРј РїСЂРёР·РЅР°РєРё
+    print(f"DEBUG: w={w}, h={h}, ratio={ratio:.3f}, avg_p={avg_perimeter:.1f}, area={total_area:.1f}, gap={gap:.1f}")
+
+    p1 = 68.0 * ratio
+    p2 = 35.0 * ratio
+    g1 = 190.0 * ratio
+
+    if avg_perimeter > p1:
         return "first"
-
-    if avg_p > 50:
-        return "fourth"
-
-    if avg_p > 42:
-        if gap < 150 and area < 180:
-            return "second"
-        else:
-            return "fourth"
-
-    if avg_p > 32:
-        if gap < 100:
-            return "second"
-        elif gap > 200 or area > 130:
-            return "fourth"
-        else:
-            return "third"
-
-    # avg_p <= 32
-    if gap < 100:
-        return "second"
+    elif avg_perimeter > p2:
+        return "second" if gap < g1 else "fourth"
     else:
+        compactness = total_area / (avg_perimeter + 1e-5)
+        if total_area > 1200 * ratio or compactness > 15 * ratio:
+            return "second"
         return "third"
